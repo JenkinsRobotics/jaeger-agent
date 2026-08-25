@@ -61,9 +61,15 @@ def wait_for(predicate: Any, timeout: float = 1.0) -> None:
 def test_module_manifest_is_valid() -> None:
     package_dir = Path(__file__).parents[1] / "jaeger_agent"
     spec = load_module(package_dir)
+    assert spec.id == "org.jenkinsrobotics.mind.agent"
     assert spec.module == "jaeger_agent"
     assert spec.slot == "mind"
+    assert spec.kind == "mind"
     assert spec.factory == "jaeger_agent:make_mind_node"
+    # id + kind are how JaegerOS addresses this module. 1.0.0 shipped
+    # without them and the OS lost its route to the mind, because this
+    # test was relaxed in the same commit that dropped them. Keep them
+    # asserted so a manifest edit fails here instead of at boot.
 
 
 def test_bridge_runs_a_headless_turn_and_publishes_events() -> None:
