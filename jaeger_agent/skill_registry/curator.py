@@ -139,7 +139,7 @@ def assess(
         skills = discover_playbooks()
     if usage is None:
         try:
-            from jaeger_ai.core.runtime.usage_stats import snapshot
+            from jaeger_agent.usage import snapshot
             usage = snapshot().get("skills", {})
         except Exception:  # noqa: BLE001
             usage = {}

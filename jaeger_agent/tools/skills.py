@@ -98,7 +98,7 @@ def skill(action: str, name: str = "", query: str = "",
     act = (action or "").strip().lower()
 
     if act in ("stats", "usage"):
-        from jaeger_ai.core.runtime.usage_stats import top_skills, top_tools
+        from jaeger_agent.usage import top_skills, top_tools
         return {"ok": True, "tools": top_tools(12), "skills": top_skills(12)}
 
     if act in ("curate", "curation", "cleanup"):
@@ -180,7 +180,7 @@ def skill(action: str, name: str = "", query: str = "",
         except Exception:  # noqa: BLE001 — never let preprocessing break view
             pass
         try:
-            from jaeger_ai.core.runtime.usage_stats import record_skill
+            from jaeger_agent.usage import record_skill
             record_skill(s.name)
         except Exception:  # noqa: BLE001
             pass

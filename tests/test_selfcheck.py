@@ -88,3 +88,64 @@ def test_json_output_is_machine_readable(capsys) -> None:
     payload = json.loads(capsys.readouterr().out)
     assert payload["ok"] is True
     assert payload["checks"] and all("name" in c for c in payload["checks"])
+
+
+# ── the usage seam (1.0.3) ─────────────────────────────────────────
+
+
+def test_usage_counts_in_memory_without_a_host() -> None:
+    """The point of the inversion: an embedder that is not JaegerAI still
+    gets working counters, where before it got none."""
+    from jaeger_agent import usage
+
+    usage.set_sink(None)
+    usage.reset()
+    usage.record_tool("read_file", ok=True, elapsed=0.5)
+    usage.record_tool("read_file", ok=False, elapsed=0.25)
+    usage.record_skill("debugging")
+
+    top = usage.top_tools(3)[0]
+    assert top["name"] == "read_file"
+    assert top["calls"] == 2 and top["failures"] == 1
+    assert usage.top_skills(3)[0] == {"name": "debugging", "views": 1}
+    usage.reset()
+
+
+def test_a_registered_sink_wins_for_reads() -> None:
+    """A host with persisted history should beat this process's slice."""
+    from jaeger_agent import usage
+
+    class Sink:
+        def top_tools(self, limit):
+            return [{"name": "from_host"}]
+
+    usage.reset()
+    usage.record_tool("local_only")
+    usage.set_sink(Sink())
+    try:
+        assert usage.top_tools(3) == [{"name": "from_host"}]
+    finally:
+        usage.set_sink(None)
+        usage.reset()
+
+
+def test_a_raising_sink_never_breaks_a_turn() -> None:
+    """Telemetry is best-effort. A broken host backend must degrade to the
+    in-memory counters, not take down the tool call being counted."""
+    from jaeger_agent import usage
+
+    class Bad:
+        def record_tool(self, *a, **k):
+            raise RuntimeError("boom")
+
+        def top_tools(self, limit):
+            raise RuntimeError("boom")
+
+    usage.reset()
+    usage.set_sink(Bad())
+    try:
+        usage.record_tool("still_counted")          # must not raise
+        assert usage.top_tools(3)[0]["name"] == "still_counted"
+    finally:
+        usage.set_sink(None)
+        usage.reset()
