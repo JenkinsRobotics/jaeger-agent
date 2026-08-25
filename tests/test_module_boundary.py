@@ -33,8 +33,8 @@ _PKG = pathlib.Path(__file__).parents[1] / "jaeger_agent"
 # telemetry inverted; 47/25 at 1.0.5 — the person index moved to the
 # agent's own facts store). Lower as couplings are removed;
 # never raise them without a note in the commit message saying why.
-MAX_APP_IMPORTS = 47
-MAX_APP_IMPORT_FILES = 25
+MAX_APP_IMPORTS = 37
+MAX_APP_IMPORT_FILES = 20
 
 #: Sibling MODULES the mind must never import. Unlike the app budget
 #: above, this one is zero and stays zero: TTS and STT are reached as

@@ -31,7 +31,7 @@ from typing import Any
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:  # annotations only — no runtime dependency on a host
-    from jaeger_ai.core.instance.instance import InstanceLayout
+    from jaeger_agent.instance import Layout as InstanceLayout
 
 
 _NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.-]{0,63}$")

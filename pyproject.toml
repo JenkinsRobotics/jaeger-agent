@@ -20,6 +20,12 @@ dependencies = [
     "jaeger-os>=0.9.0",
     "llama-cpp-python>=0.3",
     "jinja2>=3.1",
+    # Six core modules parse YAML at runtime — the skill registry (manifest
+    # v3, capability state, packaging), plugin manifests, and instance.py's
+    # identity/config readers. It was declared only under [dev] and arrived
+    # transitively via jaeger-os, which is not a guarantee for something the
+    # prompt-assembly path depends on.
+    "pyyaml>=6",
 ]
 
 # Everything else is a REMOTE or alternative backend, and therefore

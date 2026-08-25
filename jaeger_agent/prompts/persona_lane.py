@@ -391,9 +391,8 @@ def _messaging_channel_status(channel: str, layout: Any) -> str:
     if not has_credential:
         return "✗ (needs token)"
     try:
-        from jaeger_ai.core.instance.schemas import Config, load_yaml
-        cfg = load_yaml(layout.config_path, Config)
-        autostart = {n.strip().lower() for n in (cfg.plugins.autostart or [])}
+        from jaeger_agent.instance import plugin_autostart
+        autostart = plugin_autostart(layout)
     except Exception:  # noqa: BLE001 — self-model is best-effort
         autostart = set()
     return "✓ active" if channel in autostart else "✓ available"
