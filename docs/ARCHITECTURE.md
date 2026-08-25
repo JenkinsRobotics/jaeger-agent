@@ -15,7 +15,6 @@ Companion docs live beside this one:
 | The public runtime contract | [`core/agent_contract.md`](core/agent_contract.md) |
 | Dynamic tool surface (and why it is off) | [`core/toolset_scoping_ab.md`](core/toolset_scoping_ab.md) |
 | Skill format and lifecycle | [`skills/skill_schema_v3.md`](skills/skill_schema_v3.md) |
-| What the module may modify about itself | [`core/SELF_MODIFICATION_BOUNDARIES.md`](core/SELF_MODIFICATION_BOUNDARIES.md) |
 
 > **Note on moved docs.** The files under `docs/core/`, `docs/pipelines/`
 > and `docs/skills/` were written while this code still lived inside
@@ -42,6 +41,7 @@ produced it.
 | Design explorations, mode A/B/C comparisons | The mode that shipped |
 | Build plans, backlogs, roadmaps | The built thing |
 | Product policy — which character, which voice | The seam that policy plugs into |
+| Personas, traits, safety policy — demo ideas still being flushed out | Nothing yet; see §6 |
 | Benchmark corpora under active authoring | Benchmark *results* that settled a decision |
 | Anything still changing shape | Anything other apps must be able to rely on |
 
@@ -307,6 +307,28 @@ Three details that make it hold:
    pass uses (`persona_filter.py`) — *imported, not duplicated*. If
    styling would gut the content, the raw answer ships instead.
 
+### Mechanism here, content and policy in the application
+
+Persona is the clearest case of §0 in practice, and the split runs
+straight through the source:
+
+| | app imports | verdict |
+| --- | ---: | --- |
+| `safety.py` | **0** | self-contained |
+| `prompts/persona_lane.py` — the lane | 2 | mechanism, nearly clean |
+| `prompts/persona_filter.py` — survival gate | 0 | mechanism |
+| `tools/persona.py` — traits, characters, people | **6** | content, fully coupled |
+
+That 6-of-6 is not a coupling bug to fix in place. Characters, trait
+layers, and safety policy are still demo-stage ideas being worked out
+against a real product — they belong in JaegerAI, and `tools/persona.py`
+reads as a set of tools that have not moved back yet. The *lane* is what
+locked in: a structure any application can pour its own character into.
+Mochi does exactly that, with a completely different character model.
+
+So this section documents a **mechanism with a hole in the middle**. The
+hole is deliberate. What fills it is the host's business.
+
 **Fail-open contract.** `run_persona_turn` returns `None` **only** for a
 failure occurring *before* `perform_task` runs — the caller's signal to
 fall through to plain Mode A untouched. Once `perform_task` has been
@@ -336,7 +358,10 @@ Where it does not, as of `1.0.1`:
 
 - **54 imports of `jaeger_ai`** across ~24 files in package code, spanning
   18 distinct app modules. Heaviest: instance schemas (9), `jaeger_ai.main`
-  (8), instance layout (7), usage stats (4), plugins (4).
+  (8), instance layout (7), usage stats (4), plugins (4). Not all want the
+  same remedy: the instance and pipeline ones want a seam, while
+  `tools/persona.py`'s six want the *tools themselves* to move back to the
+  application (§6).
 - **42 undeclared third-party imports** in package code — `numpy`, `yaml`,
   `requests`, `certifi`, `torch`, `pydantic` — against a `pyproject.toml`
   declaring only `jaeger-os`, `llama-cpp-python`, `jinja2`.
