@@ -15,6 +15,7 @@ Companion docs live beside this one:
 | The public runtime contract | [`core/agent_contract.md`](core/agent_contract.md) |
 | Dynamic tool surface (and why it is off) | [`core/toolset_scoping_ab.md`](core/toolset_scoping_ab.md) |
 | Skill format and lifecycle | [`skills/skill_schema_v3.md`](skills/skill_schema_v3.md) |
+| Station 3 / the voice pipeline | [`skills/agentic_runners.md`](skills/agentic_runners.md) |
 
 > **Note on moved docs.** The files under `docs/core/`, `docs/pipelines/`
 > and `docs/skills/` were written while this code still lived inside
@@ -41,7 +42,7 @@ produced it.
 | Design explorations, mode A/B/C comparisons | The mode that shipped |
 | Build plans, backlogs, roadmaps | The built thing |
 | Product policy — which character, which voice | The seam that policy plugs into |
-| Personas, traits, safety policy — demo ideas still being flushed out | Nothing yet; see §6 |
+| Character formats, trait layers, safety policy — still being designed, differently, in each app | The *channel* a compiled character arrives through (§6) |
 | Benchmark corpora under active authoring | Benchmark *results* that settled a decision |
 | Anything still changing shape | Anything other apps must be able to rely on |
 
@@ -253,89 +254,124 @@ Two budget subtleties worth knowing:
 
 ---
 
-## 6. The dual-lane persona pipeline — "the id and the ego"
+## 6. The dual context pipeline — execution vanilla, voice separate
 
-This is the most unusual thing in the module, and the one most likely to
-be mistaken for ordinary persona prompting. It is not.
+This is the module's most distinctive decision, and the easiest to
+mistake for ordinary persona prompting. It is the opposite of that.
 
-**The problem.** Give an agent a character and it starts asserting things
-in character. Ask Lilith the time and she will *tell* you the time —
-warmly, confidently, and wrongly. Every hallucination of this shape is a
-persona answering a reality question it should have delegated.
+**The measured problem.** A character in the execution context costs a 4B
+model **~7 bench points**. Personality tokens sitting beside tool schemas
+and history degrade routing — the model spends attention being someone
+while it is trying to decide something.
 
-**The structure.** Persona Mode C (`prompts/persona_lane.py`) runs two
-lanes with a Freudian division that is load-bearing, not decorative:
+**The answer: two contexts, never mixed.**
 
 ```
-        the id                    the ego                the superego
-   ┌──────────────────┐     ┌──────────────────┐    ┌──────────────────┐
-   │  persona lane    │     │  clean agent     │    │ permission tiers │
-   │  voice, desire,  │────▶│  persona OFF,    │    │ e-stop,          │
-   │  character       │     │  all 96 tools,   │    │ fail-closed      │
-   │                  │◀────│  hardened prompt │    │ gates            │
-   └──────────────────┘     └──────────────────┘    └──────────────────┘
-        wants to              reality-tests            says no to both
-        answer now            via tool calls
-                    ▲
-          ONE tool: perform_task
+  ── pipeline 1 · EXECUTION ────────────────────────────────────
+     system prompt: safety · framework · skills · tools · board
+     history, tool schemas, tool results
+     NO character.  Workers run vanilla.
+                    │
+                    ▼  final answer (correct, toneless)
+  ── pipeline 2 · VOICE  (Station 3) ──────────────────────────
+     apply_persona_voice(answer, character_block=…)
+     context = the answer + the compiled character block
+     no tools · no history · no schemas
+                    │
+                    ▼  same answer, in character
 ```
 
-**The invariant that makes it safe: the id never touches reality
-directly.** The persona reaches the agent through exactly one tool,
-`perform_task`. A tool call *is* reality-testing.
+`prompts/assemble.py` line 116 says it outright: *"there is deliberately
+NO character/persona fragment here."* The registry of prompt fragments
+has `safety`, `framework`, `instance` and `dynamic` kinds — and no
+persona among them.
 
-**Why it does not degrade the clean agent.** `perform_task` invokes the
-full agentic loop with **persona off, every tool available, and the
-hardened system prompt**. The character is not in the room while the work
-happens. So routing accuracy, tool selection, and multi-step planning run
-on exactly the same surface the benchmarks measure — the persona
-influences *which questions get delegated* and *how the answer is
-voiced*, never how the work is done.
+The single exception is the agent's **name**, and the reasoning is exact:
+*a name is a fact, not a persona.* The fragment note reads "the agent's
+NAME only (never the character's) — persona stays in the output filter."
 
-Three details that make it hold:
+### Why this influences results without harming them
 
-1. **Delegation is a tool call, not a prose classifier.** The decision to
-   delegate uses the same text-dialect tool-call shape the routing bench
-   already measures, so it inherits that reliability instead of inventing
-   a new, unmeasured classifier.
+Because the character is applied **after** the work is finished, in a
+call that cannot see the work being done, it cannot bias tool selection,
+planning, or recovery. The engine is *always* measured persona-off — the
+bench drives the loop directly and never passes through Station 3, so
+routing numbers are never flattered by voice and never damaged by it.
+
+What the character still does is real: it decides how the answer sounds,
+which for a conversational assistant is most of the perceived quality.
+Same correctness, different product.
+
+Guardrails, all deliberate:
+
+- **Fail-open.** Any failure — model error, empty rewrite, oversized
+  input — returns the **original answer untouched**. Losing voice is
+  acceptable; losing the answer is not.
+- **Content survival.** `_preserves_content` gates the rewrite. Facts,
+  numbers, units, paths, URLs and code must survive verbatim; restyled
+  never means replaced.
+- **Bounded.** Answers over `DEFAULT_MAX_CHARS` (1600) pass through
+  unstyled — rewriting a long report risks mangling it and doubles
+  latency exactly when the answer was already expensive.
+- **Killable.** `persona.output_filter: false` in config, or
+  `JAEGER_PERSONA_FILTER=0` in the environment.
+
+### The channel is a string, and that is the whole point
+
+```python
+apply_persona_voice(answer, character_block=<app-compiled text>)
+```
+
+`character_block` is **opaque**. The module never parses it, never
+validates it, and has no opinion about where it came from.
+
+That matters because applications genuinely disagree here. JaegerAI
+compiles a character from four trait layers (hexaco · special ·
+expression · domains) plus identity and soul. Mochi uses a different
+character structure entirely, and is still changing it. Both are R&D —
+being designed and tested in different directions at the same time (§0).
+
+Neither format reaches this module. Each application compiles its own
+characters into a block and hands the string over. The agent owns the
+*channel*; the apps own the *character*. That is why two applications
+with incompatible character models can share one agent unchanged — and
+why `tools/persona.py`, which reads JaegerAI's trait layers directly, is
+six-for-six coupled to JaegerAI and should move back there (§7).
+
+### A separate thing: Persona Mode C, the id and the ego
+
+Not to be confused with the above. Mode C (`prompts/persona_lane.py`) is
+an **optional lane** in which the character speaks first and reaches the
+clean agent through exactly one tool, `perform_task`.
+
+The framing is Freudian and load-bearing rather than decorative: the
+persona lane is the **id** (voice, desire, wants to answer now); the
+clean agent is the **ego** (reality principle — a tool call *is*
+reality-testing); the permission tiers, e-stop and fail-closed gates are
+the **superego**, refusing regardless of what either wants.
+
+The invariant that makes it safe: **the id never touches reality
+directly.** Lilith cannot assert the time — she must delegate to the ego,
+which checks. Every hallucination of that shape is a persona answering a
+reality question it should have handed off.
+
+It shares the property that makes §6 work — `perform_task` runs
+persona-off with every tool and the hardened prompt — plus three of its
+own:
+
+1. **Delegation is a tool call, not a prose classifier**, so it inherits
+   the reliability the routing bench already measures instead of
+   inventing a new, unmeasured decision path.
 2. **Recursion is structurally impossible, not policed.** The
-   `perform_task` closure is built by the *caller* and invokes
-   `drive_one_turn` directly — never back through the persona module.
-   There is no code path for the ego to re-enter the id.
-3. **Compose never means replace.** When the id styles the tool's raw
-   result, it is checked by the same content-survival gate the restyle
-   pass uses (`persona_filter.py`) — *imported, not duplicated*. If
-   styling would gut the content, the raw answer ships instead.
+   `perform_task` closure is built by the caller and invokes
+   `drive_one_turn` directly — there is no code path back into the lane.
+3. **Compose never means replace** — it reuses Station 3's content
+   survival gate, imported rather than duplicated.
 
-### Mechanism here, content and policy in the application
-
-Persona is the clearest case of §0 in practice, and the split runs
-straight through the source:
-
-| | app imports | verdict |
-| --- | ---: | --- |
-| `safety.py` | **0** | self-contained |
-| `prompts/persona_lane.py` — the lane | 2 | mechanism, nearly clean |
-| `prompts/persona_filter.py` — survival gate | 0 | mechanism |
-| `tools/persona.py` — traits, characters, people | **6** | content, fully coupled |
-
-That 6-of-6 is not a coupling bug to fix in place. Characters, trait
-layers, and safety policy are still demo-stage ideas being worked out
-against a real product — they belong in JaegerAI, and `tools/persona.py`
-reads as a set of tools that have not moved back yet. The *lane* is what
-locked in: a structure any application can pour its own character into.
-Mochi does exactly that, with a completely different character model.
-
-So this section documents a **mechanism with a hole in the middle**. The
-hole is deliberate. What fills it is the host's business.
-
-**Fail-open contract.** `run_persona_turn` returns `None` **only** for a
-failure occurring *before* `perform_task` runs — the caller's signal to
-fall through to plain Mode A untouched. Once `perform_task` has been
-called it always returns a string, never `None`, because the alternative
-is running the turn twice.
-
----
+`run_persona_turn` returns `None` **only** for a failure *before*
+`perform_task` runs — the caller's signal to fall through to plain Mode A
+untouched. Once `perform_task` has been called it always returns a
+string, because the alternative is running the turn twice.
 
 ## 7. The module boundary
 
@@ -393,9 +429,18 @@ first — it will save you from re-running a refuted experiment.
 Changing the context guard: [`core/context_guard.md`](core/context_guard.md),
 and note the stage-3 invariant in §5.
 
-Touching persona: §6, then `prompts/persona_lane.py` — its module
-docstring is the authoritative statement of the contract. The id/ego
-split is not a metaphor to tidy up; it is the safety property. The
-design exploration that produced Mode C (modes A/B/C compared, the build
-plan) stayed in JaegerAI under `dev/docs/roadmap/`, per §0 — read it for
-*why these three options*, read here for *what shipped*.
+Touching persona: §6 first, and note it describes **two different
+things**. The dual context pipeline (execution vanilla, voice applied
+after, `prompts/persona_filter.py`) is always on and is why a character
+costs no accuracy. Persona Mode C (`prompts/persona_lane.py`) is an
+optional lane on top of it; its module docstring is the authoritative
+statement of that contract.
+
+Before adding anything character-shaped to the system prompt, read
+`prompts/assemble.py` line 116 and the ~7-point measurement behind it.
+The omission is the feature.
+
+The R&D that produced both — the persona compiler, the A/B/C mode
+comparison, the Mode C build plan — stayed in JaegerAI per §0. Read those
+for *why*; read here for *what shipped* and *what other apps can rely
+on*.
