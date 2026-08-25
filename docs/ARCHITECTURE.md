@@ -144,11 +144,11 @@ AgentBridge._loop  (worker thread)          jaeger_agent/bridge.py
   │      (classified retry + fallback chain; heartbeat ticks)
   │   3  append assistant Message (may carry text AND tool_calls)
   │      no tool_calls → return text ───── final answer ──▶
-  │   4  skip-final fast path: iteration 1, one deterministic tool,
+  │   4  The Skip-Final Fast Path: iteration 1, one deterministic tool,
   │      non-multistep → dispatch + finalize, no second model call
   │   5  dispatch each tool_call → append {role:"tool"}
   │      (all-read / path-scoped batches run via _dispatch_parallel)
-  │      loop-backstop: identical-call · semantic-failure · runaway
+  │      The Loop Backstop: identical-call · semantic-failure · runaway
   └────── loop ◀───────────────────────────────────────────┘
       │
   ChatReply → /sense/chat ; AgentState "idle"
@@ -161,15 +161,15 @@ boundary"*, one model context, zero added latency on the happy path:
 
 | | | |
 | --- | --- | --- |
-| **1 · fluid loop** | research ⇄ execute, pivots allowed | benched E4B 77-78/81 — *do not touch* |
-| **2 · verify gate** | `loop/verify_gate.py`, at the single `if not tool_calls:` exit | one nudge max, never denies |
-| **3 · persona pass** | `prompts/persona_filter.py` | §6 |
-| **4 · reflect** | post-turn journaling | feeds future skill creation |
+| **Station 1 — The Fluid Loop** | research ⇄ execute, pivots allowed | benched E4B 77-78/81 — *do not touch* |
+| **Station 2 — The Verify Gate** | `loop/verify_gate.py`, at the single `if not tool_calls:` exit | one nudge max, never denies |
+| **Station 3 — The Persona Pass** | `prompts/persona_filter.py` | §6 |
+| **Station 4 — The Reflect Journal** | post-turn journaling | feeds future skill creation |
 
 **Station 2** runs only on a candidate *final* answer, so a clean answer
-costs nothing. It catches two failure shapes: **plan-halt** (the text is a
-plan, not an answer — the model narrated and ran out of steam) and
-**claim-vs-action** (the text claims a completed mutation in first person
+costs nothing. It catches two failure shapes. **The Plan-Halt Check** (the text is a
+plan, not an answer — the model narrated and ran out of steam) and **The
+Claim-vs-Action Check** (the text claims a completed mutation in first person
 — "I've saved/scheduled/remembered…" — with no matching successful tool
 call that turn; the runner already tracks per-turn successes for free).
 
@@ -295,7 +295,7 @@ defined stages rather than failing at a cliff.
 | **3** | **In-Flight Compaction** | The current turn overflowed *by itself* (39 file reads, a big grep). Stub its **oldest** results, protecting the last two and the user message. |
 | **4** | **Typed Refusal** | `ContextOverflow`, typed. |
 
-**In-Flight Compaction** is the newest and the one that changed a documented invariant.
+**Stage 3 — In-Flight Compaction** is the newest and the one that changed a documented invariant.
 Before it, "everything after the latest user message is verbatim" was
 absolute, and a turn that read too much was simply lost with its work.
 Now that guarantee holds *until stage 3*. The cost is real — the model
@@ -308,7 +308,7 @@ Two budget subtleties worth knowing:
 - **The Serving-Model Rescope.** `ctx_window` means the *serving* model's window, not a global
   constant. A cloud model answering and the local worker lane have
   different windows; the guard is rescoped per active model per turn.
-- **`completion_reserve`** is held back from the prompt budget because the
+- **The Completion Reserve** (`completion_reserve`) is held back from the prompt budget because the
   server counts prompt + completion against **one** window. A reserve
   smaller than the answer you asked for overflows at generation time even
   though the prompt fit. It is clamped to half the window so a
@@ -359,7 +359,12 @@ about **HAL 9000** — deterministically, 2/2 versus 0/2 A/B on E4B. A
 character name in the worker prompt tints free text and false-negatives
 `answer_contains`. That is why the character name had to leave.
 
-`prompts/assemble.py` line 116 says it outright: *"there is deliberately
+**The Declared Fragment Registry** is what makes this checkable.
+`prompts/assemble.py` holds `PROMPT_FRAGMENTS`, and nothing reaches the
+model that is not a named fragment in that list — so every rule the LLM
+receives can be enumerated along with where it came from, and a hidden
+conditional injection is structurally impossible. Line 116 says it
+outright: *"there is deliberately
 NO character/persona fragment here."* The registry of prompt fragments
 has `safety`, `framework`, `instance` and `dynamic` kinds — and no
 persona among them.
@@ -385,7 +390,7 @@ Guardrails, all deliberate:
 - **Fail-open.** Any failure — model error, empty rewrite, oversized
   input — returns the **original answer untouched**. Losing voice is
   acceptable; losing the answer is not.
-- **Content survival.** `_preserves_content` gates the rewrite. Facts,
+- **The Content Survival Gate.** `_preserves_content` gates the rewrite. Facts,
   numbers, units, paths, URLs and code must survive verbatim; restyled
   never means replaced.
 - **Bounded.** Answers over `DEFAULT_MAX_CHARS` (1600) pass through
