@@ -117,6 +117,31 @@ AgentBridge._loop  (worker thread)          jaeger_agent/bridge.py
   ChatReply → /sense/chat ; AgentState "idle"
 ```
 
+### The four stations
+
+The loop above is Station 1 of a four-station runner — *"soft loop, hard
+boundary"*, one model context, zero added latency on the happy path:
+
+| | | |
+| --- | --- | --- |
+| **1 · fluid loop** | research ⇄ execute, pivots allowed | benched E4B 77-78/81 — *do not touch* |
+| **2 · verify gate** | `loop/verify_gate.py`, at the single `if not tool_calls:` exit | one nudge max, never denies |
+| **3 · persona pass** | `prompts/persona_filter.py` | §6 |
+| **4 · reflect** | post-turn journaling | feeds future skill creation |
+
+**Station 2** runs only on a candidate *final* answer, so a clean answer
+costs nothing. It catches two failure shapes: **plan-halt** (the text is a
+plan, not an answer — the model narrated and ran out of steam) and
+**claim-vs-action** (the text claims a completed mutation in first person
+— "I've saved/scheduled/remembered…" — with no matching successful tool
+call that turn; the runner already tracks per-turn successes for free).
+
+Its guarantees come from a specific failure — an earlier hard gate took
+the bench from **73 to 66**. So: at most **one** nudge per turn, the nudge
+is synthetic and never persists in session history, and the gate **never
+denies** — if the model still won't act, its answer is accepted. A failed
+nudge is information, not a wall. Kill switch `JAEGER_VERIFY_GATE=0`.
+
 `run_turn` repairs the transcript on **every** exit path. A pre-flight
 overflow rolls the user message back and re-raises; a mid-turn overflow,
 interrupt, or error closes dangling tool calls so the next turn still
@@ -264,22 +289,38 @@ model **~7 bench points**. Personality tokens sitting beside tool schemas
 and history degrade routing — the model spends attention being someone
 while it is trying to decide something.
 
-**The answer: two contexts, never mixed.**
+**The answer: the model thinks in a standard, non-persona frame, and
+persona is applied at exactly two touchpoints — one line at the start,
+one bounded call at the end.**
 
 ```
-  ── pipeline 1 · EXECUTION ────────────────────────────────────
-     system prompt: safety · framework · skills · tools · board
-     history, tool schemas, tool results
-     NO character.  Workers run vanilla.
-                    │
-                    ▼  final answer (correct, toneless)
-  ── pipeline 2 · VOICE  (Station 3) ──────────────────────────
-     apply_persona_voice(answer, character_block=…)
-     context = the answer + the compiled character block
-     no tools · no history · no schemas
-                    │
-                    ▼  same answer, in character
+   ┌── START ────────┐   ┌── MIDDLE ──────────┐   ┌── END ──────────────┐
+   │ identity NAME   │   │  STATIONS 1-2      │   │ STATION 3           │
+   │ one line, from  │──▶│  the fluid loop +  │──▶│ apply_persona_voice │──▶ user
+   │ identity.yaml.  │   │  verify gate.      │   │ answer + character  │
+   │ A FACT, not a   │   │  NO character.     │   │ block. No tools,    │
+   │ persona.        │   │  Workers vanilla.  │   │ history or schemas. │
+   └─────────────────┘   └────────────────────┘   └─────────────────────┘
 ```
+
+**Why the name — and only the name — goes in at the start.** A wrong name
+cannot be repaired downstream, because Station 3 preserves facts
+verbatim: if the worker calls itself the wrong thing, the filter
+faithfully keeps the wrong thing. So `identity_name` is one line, always
+`identity.yaml`'s `name`.
+
+**Identity is not character**, and that separation is an explicit operator
+decision: the character *never* supplies the agent's name. The character
+is the persona only — *"a robot like Jarvis, but I will name him Ted."*
+Station 3's context then injects "your name is `<identity.name>`; you
+embody `<character>`'s persona", so the rewrite keeps the instance name
+while taking the character's voice.
+
+**What happens if you break this**, measured 2026-07-05: with HAL 9000 as
+the active character, the prompt `"a story about a robot"` wrote its story
+about **HAL 9000** — deterministically, 2/2 versus 0/2 A/B on E4B. A
+character name in the worker prompt tints free text and false-negatives
+`answer_contains`. That is why the character name had to leave.
 
 `prompts/assemble.py` line 116 says it outright: *"there is deliberately
 NO character/persona fragment here."* The registry of prompt fragments
