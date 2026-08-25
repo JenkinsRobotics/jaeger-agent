@@ -1,8 +1,11 @@
 """Persona Mode C — the id and the ego.
 
-Design: dev/docs/roadmap/PERSONA_PIPELINE_ABC_DESIGN.md (Mode C section);
-build plan: dev/docs/roadmap/PERSONA_MODE_C_BUILD_PLAN.md. Operator-
-canonized framing, 2026-07-10:
+Shipped mechanism: docs/ARCHITECTURE.md section 6. The design that
+produced this mode (A/B/C compared, build plan) stayed in JaegerAI at
+dev/docs/roadmap/PERSONA_PIPELINE_ABC_DESIGN.md and
+PERSONA_MODE_C_BUILD_PLAN.md — an application is where a thing is
+designed; only what locked in came here. Operator-canonized framing,
+2026-07-10:
 
 The persona lane IS the id — desire, voice, character. It wants to answer
 everything itself, in character, right now. The clean agent (driven here
