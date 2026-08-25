@@ -91,6 +91,7 @@ __all__ = [
     "AgentActivity",
     "AgentBridge",
     "AgentCallbacks",
+    "AgentConfig",
     "AgentInterrupted",
     "AgentRequest",
     "AgentResponse",
