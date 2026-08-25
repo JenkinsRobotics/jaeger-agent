@@ -81,10 +81,47 @@ A bare `pip install jaeger-agent` brings llama.cpp weights in-process — no
 server, no API key, nothing leaving the machine. That posture is
 deliberate and is why `llama-cpp-python` is a base dependency rather than
 an extra.
+---
+
+## 1a. Named mechanisms — the index
+
+Each distinctive mechanism has **one canonical name**. Use these names in
+code comments, commit messages and issues; a mechanism referred to by
+description instead of name is one nobody can search for. Names already
+coined in the source are kept as-is rather than re-branded.
+
+| Name | What it is | Lives in | § |
+| --- | --- | --- | ---: |
+| **The Soft Loop, Hard Boundary Runner** | The four-station turn architecture: a deliberately unconstrained interior with all the discipline at the exits | `loop/` | §2 |
+| ├ **Station 1 — The Fluid Loop** | Research ⇄ execute in one context, pivots allowed, never denied mid-flow | `loop/jaeger_agent.py` | §2 |
+| ├ **Station 2 — The Verify Gate** | Last-exit check on candidate final answers | `loop/verify_gate.py` | §2 |
+| │  ├ **The Plan-Halt Check** | Catches a plan emitted where an answer belongs | `loop/verify_gate.py` | §2 |
+| │  └ **The Claim-vs-Action Check** | Catches "I've saved it" with no successful mutating call that turn | `loop/verify_gate.py` | §2 |
+| ├ **Station 3 — The Persona Pass** | One bounded clean-context call that restyles the final answer | `prompts/persona_filter.py` | §6 |
+| └ **Station 4 — The Reflect Journal** | Post-turn journaling after non-trivial tasks | `prompts/reflection.py` | §2 |
+| **The Loop Backstop** | Identical-call, semantic-failure and runaway detection inside Station 1 | `loop/jaeger_agent.py` | §2 |
+| **The Skip-Final Fast Path** | One deterministic tool on iteration 1 answers without a second model call | `loop/jaeger_agent.py` | §2 |
+| **The Declared Fragment Registry** | Every line reaching the model is a named, enumerable fragment — hidden conditional injection is structurally impossible | `prompts/assemble.py` | §6 |
+| **The Split-Context Persona Pipeline** | *Name-in, voice-out*: identity name at the start, character only at the end, vanilla worker in between | `prompts/assemble.py` + `persona_filter.py` | §6 |
+| **The Character Block Channel** | The opaque `character_block` string — the one seam an app pours its character through | `prompts/persona_filter.py` | §6 |
+| **Persona Mode C — The Id/Ego Lane** | Optional lane where the character speaks first and reaches the agent through exactly one `perform_task` tool | `prompts/persona_lane.py` | §6 |
+| **The Content Survival Gate** | Restyled never means replaced — facts, numbers, paths must survive verbatim | `prompts/persona_filter.py` | §6 |
+| **The Staged Context Guard** | Four-stage degradation instead of a cliff | `util/context_guard.py` | §5 |
+| ├ **Stage 1 — Result Pruning** | Stub oversized tool results once their turn leaves the protected tail | `util/context_guard.py` | §5 |
+| ├ **Stage 2 — The Digest Fold** | Dropped turns become one merged reference message | `util/context_guard.py` | §5 |
+| ├ **Stage 3 — In-Flight Compaction** | The current turn overflowed alone; stub its oldest results | `util/context_guard.py` | §5 |
+| └ **Stage 4 — Typed Refusal** | `ContextOverflow`, never a silent truncation | `util/context_guard.py` | §5 |
+| **The Serving-Model Rescope** | `ctx_window` follows whichever model is answering this turn, not a global constant | `loop/runtime_bridge.py` | §5 |
+| **The Completion Reserve** | Answer room held back, clamped to half the window | `loop/runtime_bridge.py` | §5 |
+| **Toolset Scoping** | On-demand tool surface — **built, benchmarked, refuted, kept off** | `skill_registry/toolset_scoping.py` | §3 |
+| **The Playbook Skill Corpus** | 107 `SKILL.md` recipes loaded on demand via `use_skill` | `skills/` | §4 |
+| **The Skill Enum Gate** | `use_skill`'s `name` is a generated enum, so a skill that does not exist cannot be named | `tools/skills.py` | §4 |
+| **The Live Tool Registry Read** | The registry is re-read every turn, so anything that registers becomes reachable without this package knowing it exists | `loop/jaeger_agent.py` | §3 |
+| **The Layout Bind Seam** | `workspace.bind(layout)` — host-injected instance root for all tool I/O | `workspace.py` | §7 |
 
 ---
 
-## 2. The turn pipeline
+## 2. The turn pipeline — The Soft Loop, Hard Boundary Runner
 
 One user message becomes one reply through `format → call → parse →
 dispatch`, looping up to `max_iterations` (24).
@@ -156,7 +193,7 @@ heard — see §7.
 
 ---
 
-## 3. Tools — and why the surface is *not* dynamic by default
+## 3. Tools — The Live Tool Registry Read, and why Toolset Scoping is off
 
 96 tools register themselves at import time onto the process-wide
 JaegerOS registry. The agent re-reads that registry every turn, which is
@@ -165,7 +202,7 @@ reachable without this package knowing it exists. That is also why
 `module.yaml` declares `tools: []` — the mind calls tools, it does not
 contribute them.
 
-### The dynamic-tool experiment, and its result
+### Toolset Scoping — built, benchmarked, refuted, kept
 
 The obvious optimisation: don't show a small model 96 schemas. Keep a
 ~17-tool CORE visible and let the model pull the rest on demand via a
@@ -209,7 +246,7 @@ prevent its return.
 
 ---
 
-## 4. Skills — the agentic multiplier
+## 4. Skills — The Playbook Skill Corpus and The Skill Enum Gate
 
 A skill is a `SKILL.md` playbook the agent reads **on demand**. 107 ship
 in the box. They are not prompts and not tools; they are recipes that
@@ -246,19 +283,19 @@ and [`pipelines/skill_self_improvement_pipeline.md`](pipelines/skill_self_improv
 
 ---
 
-## 5. The context guard — three stages, then refuse
+## 5. The Staged Context Guard
 
 `util/context_guard.py`. Runs pre-flight on every turn, and degrades in
 defined stages rather than failing at a cliff.
 
-| Stage | Action |
-| --- | --- |
-| **1 · Prune** | Stub oversized tool-result bodies once their turn leaves the protected tail. The artifact path survives in the stub, so the model can read any of it back. |
-| **2 · Digest** | Fold dropped turns into one `[EARLIER CONTEXT — REFERENCE ONLY]` message — what was asked, what tools ran, what errored. A previous digest is *merged*, never stacked. |
-| **3 · Prune in-flight** | The current turn overflowed *by itself* (39 file reads, a big grep). Stub its **oldest** results, protecting the last two and the user message. |
-| **4 · Refuse** | `ContextOverflow`, typed. |
+| Stage | Name | Action |
+| --- | --- | --- |
+| **1** | **Result Pruning** | Stub oversized tool-result bodies once their turn leaves the protected tail. The artifact path survives in the stub, so the model can read any of it back. |
+| **2** | **The Digest Fold** | Fold dropped turns into one `[EARLIER CONTEXT — REFERENCE ONLY]` message — what was asked, what tools ran, what errored. A previous digest is *merged*, never stacked. |
+| **3** | **In-Flight Compaction** | The current turn overflowed *by itself* (39 file reads, a big grep). Stub its **oldest** results, protecting the last two and the user message. |
+| **4** | **Typed Refusal** | `ContextOverflow`, typed. |
 
-Stage 3 is the newest and the one that changed a documented invariant.
+**In-Flight Compaction** is the newest and the one that changed a documented invariant.
 Before it, "everything after the latest user message is verbatim" was
 absolute, and a turn that read too much was simply lost with its work.
 Now that guarantee holds *until stage 3*. The cost is real — the model
@@ -268,7 +305,7 @@ prune count, and the turn surfaces it on `on_thinking`.
 
 Two budget subtleties worth knowing:
 
-- **`ctx_window` means the *serving* model's window**, not a global
+- **The Serving-Model Rescope.** `ctx_window` means the *serving* model's window, not a global
   constant. A cloud model answering and the local worker lane have
   different windows; the guard is rescoped per active model per turn.
 - **`completion_reserve`** is held back from the prompt budget because the
@@ -279,7 +316,7 @@ Two budget subtleties worth knowing:
 
 ---
 
-## 6. The dual context pipeline — execution vanilla, voice separate
+## 6. The Split-Context Persona Pipeline — name-in, voice-out
 
 This is the module's most distinctive decision, and the easiest to
 mistake for ordinary persona prompting. It is the opposite of that.
@@ -357,7 +394,7 @@ Guardrails, all deliberate:
 - **Killable.** `persona.output_filter: false` in config, or
   `JAEGER_PERSONA_FILTER=0` in the environment.
 
-### The channel is a string, and that is the whole point
+### The Character Block Channel
 
 ```python
 apply_persona_voice(answer, character_block=<app-compiled text>)
@@ -379,7 +416,7 @@ with incompatible character models can share one agent unchanged — and
 why `tools/persona.py`, which reads JaegerAI's trait layers directly, is
 six-for-six coupled to JaegerAI and should move back there (§7).
 
-### A separate thing: Persona Mode C, the id and the ego
+### Persona Mode C — The Id/Ego Lane (a separate mechanism)
 
 Not to be confused with the above. Mode C (`prompts/persona_lane.py`) is
 an **optional lane** in which the character speaks first and reaches the
@@ -414,7 +451,7 @@ own:
 untouched. Once `perform_task` has been called it always returns a
 string, because the alternative is running the turn twice.
 
-## 7. The module boundary
+## 7. The module boundary — The Layout Bind Seam and what still leaks
 
 `docs/EXTRACTION.md` states the rule plainly:
 
