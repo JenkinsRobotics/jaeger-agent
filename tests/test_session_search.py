@@ -88,42 +88,34 @@ def test_list_sessions_summarises_conversations(history) -> None:
     assert rows["tui"]["first_ts"] and rows["tui"]["last_ts"]
 
 
-def test_the_tool_is_registered_and_matches_the_toolset(history) -> None:
+def test_the_tool_is_registered_and_matches_the_toolset(history, live_tools) -> None:
     """The gap that started this: ``sessions`` advertised a tool that did
     not exist, in both default bundles."""
-    import jaeger_agent.tools  # noqa: F401
-    from jaeger_os.core.tools.tool_registry import get_tools
-
     from jaeger_agent.schemas.tool_bundles import JAEGER_TOOLSETS
 
-    live = {t.name for t in get_tools()}
+    live = set(live_tools)
     assert "session_search" in live
     assert set(JAEGER_TOOLSETS["sessions"]["tools"]) <= live
 
 
-def test_the_tool_lists_when_given_nothing(history) -> None:
-    import jaeger_agent.tools  # noqa: F401
-    from jaeger_os.core.tools.tool_registry import get_tools
-
-    fn = next(t for t in get_tools() if t.name == "session_search").fn
+def test_the_tool_lists_when_given_nothing(history, live_tools) -> None:
+    fn = live_tools["session_search"].fn
     out = fn()
     assert out["ok"] and out["count"] == 2          # two conversations
     out = fn(query="context guard")
     assert out["ok"] and out["turns"][0]["answer"] == "Four stages, then refuse."
 
 
-def test_the_tool_reports_failure_rather_than_raising(monkeypatch) -> None:
+def test_the_tool_reports_failure_rather_than_raising(monkeypatch, live_tools) -> None:
     """A broken lookup must come back as {"ok": False}, not an exception.
     A tool that raises takes the turn with it; one that reports lets the
     model say so and carry on."""
-    import jaeger_agent.tools  # noqa: F401
-    from jaeger_os.core.tools.tool_registry import get_tools
 
     def _boom(*a, **k):
         raise RuntimeError("no instance bound")
 
     monkeypatch.setattr(mem, "search_sessions", _boom)
-    fn = next(t for t in get_tools() if t.name == "session_search").fn
+    fn = live_tools["session_search"].fn
     out = fn(query="anything")
     assert out["ok"] is False
     assert "no instance bound" in out["error"]

@@ -29,10 +29,11 @@ import pathlib
 _PKG = pathlib.Path(__file__).parents[1] / "jaeger_agent"
 
 # ── the budgets ────────────────────────────────────────────────────
-# Measured 2026-08-25 at 1.0.3 (was 54/27 at 1.0.2 — usage telemetry
-# inverted into jaeger_agent/usage.py). Lower as couplings are removed;
+# Measured 2026-08-25 at 1.0.5 (54/27 at 1.0.2; 50/25 at 1.0.3 — usage
+# telemetry inverted; 47/25 at 1.0.5 — the person index moved to the
+# agent's own facts store). Lower as couplings are removed;
 # never raise them without a note in the commit message saying why.
-MAX_APP_IMPORTS = 50
+MAX_APP_IMPORTS = 47
 MAX_APP_IMPORT_FILES = 25
 
 #: Sibling MODULES the mind must never import. Unlike the app budget

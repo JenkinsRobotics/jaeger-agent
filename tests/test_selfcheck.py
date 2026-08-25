@@ -12,8 +12,6 @@ thing it watches burns.
 
 from __future__ import annotations
 
-import importlib
-import sys
 
 import pytest
 
@@ -21,26 +19,11 @@ from jaeger_agent import selfcheck
 
 
 @pytest.fixture(autouse=True)
-def _live_tool_surface():
-    """Re-register the tool surface before each check.
+def _live_surface():
+    """Every check here reads the real registry — see tests/conftest.py."""
+    from tests.conftest import _register_tool_surface
 
-    The registry is process-global and several sibling suites clear it on
-    purpose to install their own fixtures (test_liveness, test_length_retry,
-    test_openai_adapter, ...). Whether this file runs before or after them
-    decided whether it saw 96 tools or zero — the self-check was correct
-    both times, and the TEST was the flaky thing.
-
-    Re-importing is not enough: the registration decorators already ran, so
-    a cached module re-imports to nothing. Dropping the submodules from
-    sys.modules first makes them execute again.
-    """
-    from jaeger_os.core.tools.tool_registry import clear_registry, get_tools
-
-    if not get_tools():
-        clear_registry()
-        for name in [m for m in list(sys.modules) if m.startswith("jaeger_agent.tools")]:
-            del sys.modules[name]
-        importlib.import_module("jaeger_agent.tools")
+    _register_tool_surface()
     yield
 
 

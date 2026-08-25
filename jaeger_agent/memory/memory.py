@@ -1393,3 +1393,119 @@ def list_sessions(limit: int = 20) -> list[dict[str, Any]]:
         }
         for r in rows
     ]
+
+
+# ── people ─────────────────────────────────────────────────────────
+# A person is a SUBJECT with facts, which is what the facts table has
+# always modelled — ``(subject, key, value, category)`` with an index on
+# each. So the person index needs no new table and no migration: it is
+# one JSON profile row per person under ``category='person'``.
+#
+# The profile is a single blob rather than a fact per field because the
+# interesting parts (aliases, handles, likes) are LISTS, and the facts
+# table is key/value with an overwrite-by-key primary key. One row per
+# alias would need synthetic keys and lose ordering.
+# ponytail: one blob per person; split into fields if anything ever needs
+# to query across people by a single attribute.
+
+_PERSON_CATEGORY = "person"
+_PERSON_KEY = "profile"
+
+
+def _person_now() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def upsert_person(
+    name: str,
+    *,
+    note: str = "",
+    like: str = "",
+    access: str | None = None,
+    channel: str = "",
+    handle: str = "",
+) -> dict[str, Any]:
+    """Create or update a person. Appends notes and likes, replaces access,
+    and links a messaging handle to the person who owns it.
+
+    Returns the whole profile so a caller can show what it now knows.
+    """
+    name = (name or "").strip()
+    if not name:
+        raise ValueError("a person needs a name")
+
+    person = get_person(name) or {
+        "id": re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-") or "person",
+        "name": name,
+        "aliases": [],
+        "handles": {},
+        "access": "member",
+        "likes": [],
+        "notes": [],
+        "created_at": _person_now(),
+    }
+    if note.strip():
+        person["notes"].append(note.strip())
+    if like.strip():
+        person["likes"].append(like.strip())
+    if access:
+        person["access"] = access.strip().lower()
+    if channel.strip() and handle.strip():
+        ids = person["handles"].setdefault(channel.strip().lower(), [])
+        if handle.strip() not in ids:
+            ids.append(handle.strip())
+    person["updated_at"] = _person_now()
+
+    remember(
+        _PERSON_KEY, json.dumps(person),
+        category=_PERSON_CATEGORY, subject=name,
+    )
+    return person
+
+
+def get_person(name: str) -> dict[str, Any] | None:
+    """A person's profile by name or alias, or ``None``.
+
+    Falls back to an alias/handle scan only when the direct lookup misses,
+    so the common case stays one indexed read.
+    """
+    name = (name or "").strip()
+    if not name:
+        return None
+    raw = recall(_PERSON_KEY, subject=name)
+    if raw:
+        try:
+            return json.loads(raw)
+        except (TypeError, ValueError):
+            return None
+    lowered = name.lower()
+    for person in list_people():
+        if lowered in {a.lower() for a in person.get("aliases", [])}:
+            return person
+        for ids in person.get("handles", {}).values():
+            if name in ids:
+                return person
+    return None
+
+
+def list_people() -> list[dict[str, Any]]:
+    """Everyone in the person index, newest-updated first."""
+    from jaeger_agent.memory import sqlite_store
+
+    rows = sqlite_store.connection().execute(
+        "SELECT value FROM facts WHERE category = ? AND key = ? "
+        "ORDER BY updated_at DESC",
+        (_PERSON_CATEGORY, _PERSON_KEY),
+    ).fetchall()
+    out: list[dict[str, Any]] = []
+    for row in rows:
+        try:
+            out.append(json.loads(row["value"]))
+        except (TypeError, ValueError):
+            continue
+    return out
+
+
+def forget_person(name: str) -> bool:
+    """Drop a person from the index."""
+    return forget(_PERSON_KEY, subject=(name or "").strip())
