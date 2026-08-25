@@ -1295,3 +1295,101 @@ def load_identity_string(layout: Any) -> str:
         f"Role: {ident.role}\n"
         f"Voice: {ident.personality}"
     )
+
+
+def search_sessions(
+    query: str = "",
+    *,
+    session_key: str | None = None,
+    limit: int = 10,
+    since: str | None = None,
+) -> list[dict[str, Any]]:
+    """Search past turns across conversations — the agent reviewing its
+    own history.
+
+    ``episodic`` has held one row per turn, keyed by ``session_key``,
+    since the store was written; nothing exposed it for retrieval beyond
+    "the last N of the CURRENT session". Recalling what happened in a
+    conversation you are no longer in is a memory operation, and it is
+    the one the agent could not do.
+
+    ``query`` matches the user's message OR the answer, case-insensitively.
+    Empty ``query`` lists recent turns instead of searching, which is what
+    "what was I doing yesterday" needs.
+
+    ``session_key`` narrows to one conversation; ``since`` is an ISO date
+    or timestamp lower bound. Newest first — when reviewing history the
+    recent past is almost always the interesting part.
+    """
+    from jaeger_agent.memory import sqlite_store
+
+    limit = max(1, min(int(limit or 10), 100))
+    conn = sqlite_store.connection()
+
+    where: list[str] = []
+    params: list[Any] = []
+    if (query or "").strip():
+        # LIKE, not FTS: the episodic table has no FTS index and adding
+        # one is a migration. A conversation history is thousands of rows,
+        # not millions — LIKE is fast enough and cannot fall out of sync.
+        # ponytail: swap for FTS5 if a corpus ever makes this slow.
+        like = f"%{query.strip()}%"
+        where.append("(user LIKE ? OR answer LIKE ?)")
+        params += [like, like]
+    if session_key:
+        where.append("session_key = ?")
+        params.append(session_key)
+    if since:
+        where.append("ts >= ?")
+        params.append(since)
+
+    sql = (
+        "SELECT id, session_key, ts, user, answer, latency_ms, first_decision "
+        "FROM episodic"
+    )
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    sql += " ORDER BY id DESC LIMIT ?"
+    params.append(limit)
+
+    out: list[dict[str, Any]] = []
+    for row in conn.execute(sql, tuple(params)).fetchall():
+        out.append({
+            "id": row["id"],
+            "session": row["session_key"],
+            "ts": row["ts"],
+            "user": row["user"] or "",
+            "answer": row["answer"] or "",
+            "latency_ms": row["latency_ms"],
+            "first_decision": row["first_decision"] or "",
+        })
+    return out
+
+
+def list_sessions(limit: int = 20) -> list[dict[str, Any]]:
+    """Conversations the agent has had, newest first.
+
+    Derived from ``episodic`` rather than the ``sessions`` table: that
+    table is only populated when a host bothers to open and close a
+    session, while episodic rows are written by the turn loop itself and
+    are therefore always true.
+    """
+    from jaeger_agent.memory import sqlite_store
+
+    limit = max(1, min(int(limit or 20), 200))
+    rows = sqlite_store.connection().execute(
+        "SELECT session_key, COUNT(*) AS turns, MIN(ts) AS first_ts, "
+        "MAX(ts) AS last_ts, MAX(id) AS last_id "
+        "FROM episodic GROUP BY session_key "
+        "ORDER BY last_id DESC LIMIT ?",
+        (limit,),
+    ).fetchall()
+    return [
+        {
+            "session": r["session_key"],
+            "turns": r["turns"],
+            "first_ts": r["first_ts"],
+            "last_ts": r["last_ts"],
+        }
+        for r in rows
+    ]
