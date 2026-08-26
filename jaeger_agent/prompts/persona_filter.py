@@ -1,8 +1,8 @@
-"""Station 3 — the persona output filter (dev/docs/reality/agentic_runners.md).
+"""Station 3 — the persona output filter (docs/skills/agentic_runners.md).
 
 Workers run vanilla: a character in the execution context costs a 4B ~7
-bench points (measured — that's why assemble.py deliberately omits the
-persona fragment). The character's voice comes back HERE instead: one
+bench points (measured in JaegerAI, dev/docs/reality/persona_compiler.md —
+that's why assemble.py deliberately omits the persona fragment). The character's voice comes back HERE instead: one
 bounded, clean-context call that restyles the FINAL answer only. The
 filter's context is the answer + the compiled character block — no tools,
 no history, no schemas — so personality tokens can never pollute execution.

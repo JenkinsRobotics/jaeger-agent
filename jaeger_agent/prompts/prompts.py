@@ -11,7 +11,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:  # annotations only — no runtime dependency on a host
-    from jaeger_ai.core.instance.instance import InstanceLayout
+    from jaeger_agent.instance import Layout as InstanceLayout
 
 from .assemble import assemble_prompt as _assemble  # noqa: F401
 from .context_blocks import (  # noqa: F401

@@ -1628,7 +1628,7 @@ class JaegerAgent:
         # outcome and duration already resolved, so count it here rather
         # than at each call site. Best-effort: telemetry never breaks a turn.
         try:
-            from jaeger_ai.core.runtime.usage_stats import record_tool
+            from jaeger_agent.usage import record_tool
             record_tool(name, ok=_ok, elapsed=elapsed)
         except Exception:  # noqa: BLE001
             pass

@@ -1,8 +1,11 @@
 """Persona Mode C — the id and the ego.
 
-Design: dev/docs/roadmap/PERSONA_PIPELINE_ABC_DESIGN.md (Mode C section);
-build plan: dev/docs/roadmap/PERSONA_MODE_C_BUILD_PLAN.md. Operator-
-canonized framing, 2026-07-10:
+Shipped mechanism: docs/ARCHITECTURE.md section 6. The design that
+produced this mode (A/B/C compared, build plan) stayed in JaegerAI at
+dev/docs/roadmap/PERSONA_PIPELINE_ABC_DESIGN.md and
+PERSONA_MODE_C_BUILD_PLAN.md — an application is where a thing is
+designed; only what locked in came here. Operator-canonized framing,
+2026-07-10:
 
 The persona lane IS the id — desire, voice, character. It wants to answer
 everything itself, in character, right now. The clean agent (driven here
@@ -285,7 +288,7 @@ MAX_HISTORY_CHARS = 3200
 # perform_task as the one real callable, or the id treats a label as a
 # tool name and the call dies unparsed.
 _SELF_MODEL_HEADER = (
-    "You are a Jaeger agent running locally on this machine. Capability "
+    "You are a JROS agent running locally on this machine. Capability "
     "areas below are NOT tool names — you reach ALL of them through "
     "your one tool, perform_task:"
 )
@@ -388,9 +391,8 @@ def _messaging_channel_status(channel: str, layout: Any) -> str:
     if not has_credential:
         return "✗ (needs token)"
     try:
-        from jaeger_ai.core.instance.schemas import Config, load_yaml
-        cfg = load_yaml(layout.config_path, Config)
-        autostart = {n.strip().lower() for n in (cfg.plugins.autostart or [])}
+        from jaeger_agent.instance import plugin_autostart
+        autostart = plugin_autostart(layout)
     except Exception:  # noqa: BLE001 — self-model is best-effort
         autostart = set()
     return "✓ active" if channel in autostart else "✓ available"

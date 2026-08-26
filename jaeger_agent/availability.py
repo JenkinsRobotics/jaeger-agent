@@ -117,10 +117,6 @@ _PLUGIN_READY_OVERRIDES: dict[str, list[str]] = {}
 # whose module has been removed entirely, instead of falling back to
 # the plugin mechanism's fail-open default.
 _TOOL_TO_MODULE: dict[str, str] = {
-    "text_to_speech":   "kokoro_tts",
-    "speak":            "kokoro_tts",    # legacy alias
-    "warm_kokoro":      "kokoro_tts",
-    "listen":           "whisper_stt",   # 0.8 M2b: plugin -> module
     "set_avatar_state": "animation",     # 0.8 M2c: was UNGATED entirely
     "play_timeline":    "animation",
     "warm_avatar":      "animation",
@@ -136,6 +132,17 @@ _TOOL_TO_MODULE: dict[str, str] = {
 # same fail-closed contract as :func:`_module_ready`.
 _TOOL_TO_SLOT: dict[str, str] = {
     "send_message": "messaging",
+    # 1.0.2: speech moved here from _TOOL_TO_MODULE, which pinned these
+    # to the engine names "kokoro_tts" / "whisper_stt". A slot can hold
+    # any module that claims it, so keying on the SLOT is what lets a
+    # different TTS or STT engine light these tools up without editing
+    # the agent. With kokoro/whisper installed the answer is identical;
+    # it differs only in the case the old mapping got wrong.
+    "text_to_speech": "tts",
+    "speak":          "tts",    # legacy alias for text_to_speech
+    "warm_tts":       "tts",
+    "warm_kokoro":    "tts",    # historical spelling
+    "listen":         "stt",
 }
 
 

@@ -45,7 +45,7 @@ from jaeger_os.core.tools.tool_registry import (
 )
 from jaeger_os.core.tools.tool_schema import ToolDef, dev_mode_enabled
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 
 
 # ── lazy exports (PEP 562) ───────────────────────────────────────────
@@ -91,6 +91,7 @@ __all__ = [
     "AgentActivity",
     "AgentBridge",
     "AgentCallbacks",
+    "AgentConfig",
     "AgentInterrupted",
     "AgentRequest",
     "AgentResponse",

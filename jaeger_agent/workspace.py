@@ -13,7 +13,6 @@ category files focused on their tools, free of cross-skill plumbing.
 
 from __future__ import annotations
 
-import contextlib
 import json
 import os
 import shutil
@@ -25,7 +24,7 @@ from typing import Any
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:  # annotations only — no runtime dependency on a host
-    from jaeger_ai.core.instance.instance import InstanceLayout
+    from jaeger_agent.instance import Layout as InstanceLayout
 
 
 # ---------------------------------------------------------------------------

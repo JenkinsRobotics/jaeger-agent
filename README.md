@@ -160,6 +160,12 @@ loop, provider adapters, message schemas, tool execution, context management,
 and mind module. JaegerAI consumes this package and retains only its application
 surfaces, bundled content, product configuration, and product-specific hooks.
 
+Outstanding work is tracked in [`docs/NEXT.md`](docs/NEXT.md).
+
+See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the turn pipeline,
+the tool and skill surfaces, the context guard, and the dual-lane persona
+design — plus the rule for what belongs in this module at all.
+
 See [`docs/EXTRACTION.md`](docs/EXTRACTION.md) for ownership rules and the
 ordered migration milestones.
 

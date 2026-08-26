@@ -295,6 +295,14 @@ def register_skill_toolset(name: str, tools: list[str],
     _SKILL_SUMMARY[name] = summary or f"the {name} skill"
 
 
+#: Host-facing alias. The function above is named for its first caller,
+#: the skill loader, but since 1.0.7 a host application registers its own
+#: toolsets through the same path — and asking an app to call something
+#: called ``register_skill_toolset`` to declare tools that are not a
+#: skill's is a name that will mislead every time it is read.
+register_toolset = register_skill_toolset
+
+
 def reset_toolsets() -> None:
     """Reset to core-only. Called at session start / instance switch."""
     _active.clear()

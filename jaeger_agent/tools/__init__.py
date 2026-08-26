@@ -15,7 +15,7 @@ Categories:
   • scheduling.py     — schedule_prompt, list_schedules, cancel_schedule
   • web.py            — web_search, get_weather
   • code.py           — run_python
-  • speak.py          — speak (text or workspace file), warm_kokoro
+  • speak.py          — speak (text or workspace file), warm_tts
   • vision.py         — look_at, generate_image (Moondream2 + SDXL-Turbo)
   • host.py           — open_on_host (macOS: URL / file / app)
   • credentials.py    — get_credential, list_credentials
@@ -75,8 +75,12 @@ from .speak import (
     KOKORO_LANG,
     KOKORO_SAMPLE_RATE,
     KOKORO_VOICE,
+    TTS_DEFAULT_LANG,
+    TTS_DEFAULT_SAMPLE_RATE,
+    TTS_DEFAULT_VOICE,
     speak,
     warm_kokoro,
+    warm_tts,
 )
 
 # Avatar (0.5 — AnimationNode driving)
@@ -191,7 +195,10 @@ __all__ = [
     # remote execution
     "ssh_exec",
     # speak
-    "speak", "warm_kokoro",
+    "speak", "warm_tts",
+    "TTS_DEFAULT_VOICE", "TTS_DEFAULT_LANG", "TTS_DEFAULT_SAMPLE_RATE",
+    # 1.0.2 aliases — the engine-named spellings, kept one release.
+    "warm_kokoro",
     "KOKORO_VOICE", "KOKORO_LANG", "KOKORO_SAMPLE_RATE",
     # vision
     "look_at", "generate_image",

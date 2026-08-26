@@ -446,23 +446,25 @@ def test_call_counters_reset_between_turns():
 
 
 def _install_fake_usage_stats(monkeypatch) -> list[tuple]:
-    """Stand in for ``jaeger_ai.core.runtime.usage_stats``.
+    """Capture what dispatch records.
 
-    The loop imports it lazily and jaeger-ai is not a dependency of this
-    package, so injecting the module keeps the assertion honest whether
-    or not the app tier happens to be installed alongside.
+    Until 1.0.3 this had to fabricate a whole ``jaeger_ai.core.runtime``
+    module tree, because the loop imported the app's usage_stats directly
+    and jaeger-ai is not a dependency of this package. The counters are
+    the module's own now (``jaeger_agent.usage``), so the test patches one
+    function and the fake package tree is gone — which is the coupling
+    removal showing up as less test scaffolding.
     """
-    import sys
-    import types
+    from jaeger_agent import usage
 
     calls: list[tuple] = []
-    mod = types.ModuleType("jaeger_ai.core.runtime.usage_stats")
-    mod.record_tool = lambda name, *, ok=True, elapsed=0.0: calls.append(  # type: ignore[attr-defined]
-        (name, ok, round(elapsed, 6) >= 0.0)
+    monkeypatch.setattr(
+        usage,
+        "record_tool",
+        lambda name, *, ok=True, elapsed=0.0: calls.append(
+            (name, ok, round(elapsed, 6) >= 0.0)
+        ),
     )
-    for part in ("jaeger_ai", "jaeger_ai.core", "jaeger_ai.core.runtime"):
-        monkeypatch.setitem(sys.modules, part, types.ModuleType(part))
-    monkeypatch.setitem(sys.modules, "jaeger_ai.core.runtime.usage_stats", mod)
     return calls
 
 

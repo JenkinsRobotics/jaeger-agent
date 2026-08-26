@@ -14,7 +14,6 @@ knowledge + procedure the agent executes with `terminal` / `execute_code`.
 
 from __future__ import annotations
 
-import re
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -155,11 +154,10 @@ def _disabled_playbook_names() -> set[str]:
     """Playbook names disabled via ``skills.disabled_playbooks`` in the bound
     instance config. Empty when no instance is bound."""
     try:
-        from jaeger_ai.core.instance.schemas import Config, load_yaml
+        from jaeger_agent.instance import disabled_playbooks
         from jaeger_agent.workspace import get_layout
 
-        cfg = load_yaml(get_layout().config_path, Config)
-        return {str(n) for n in cfg.skills.disabled_playbooks}
+        return disabled_playbooks(get_layout())
     except Exception:  # noqa: BLE001 — no instance / no config is fine
         return set()
 

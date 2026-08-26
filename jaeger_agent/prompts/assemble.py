@@ -36,7 +36,7 @@ from typing import Callable, Literal
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:  # annotations only — no runtime dependency on a host
-    from jaeger_ai.core.instance.instance import InstanceLayout
+    from jaeger_agent.instance import Layout as InstanceLayout
 
 from .context_blocks import (
     build_board_block,
@@ -116,7 +116,8 @@ def _three_laws(_ctx: FragmentContext) -> str:
 # NOTE: there is deliberately NO character/persona fragment here. The persona is
 # applied by the two-pass OUTPUT FILTER (re-voicing the final reply), not injected
 # into the worker prompt — a 4B's execution degrades ~7% with a character in
-# context (measured: dev/docs/reality/persona_compiler.md). Workers run vanilla; the
+# context (measured in JaegerAI, dev/docs/reality/persona_compiler.md).
+# Workers run vanilla; the
 # character's compiled View (Character.character_block()) feeds the filter, which
 # lives in the response path, not prompt assembly.
 #
@@ -140,7 +141,7 @@ def _identity_name(ctx: FragmentContext) -> str:
     (operator, 2026-07-05). The character prompt must never overwrite it.
 
     Name ONLY: soul/traits/voice stay out of the worker prompt (station 3,
-    dev/docs/reality/agentic_runners.md — the measured ~7-point execution tax); the
+    docs/skills/agentic_runners.md — the measured ~7-point execution tax); the
     persona output filter supplies the voice.
 
     ``JAEGER_BENCH_NEUTRAL_IDENTITY`` is now a NO-OP kept for bench-runner
@@ -149,8 +150,8 @@ def _identity_name(ctx: FragmentContext) -> str:
     the 2026-07-05 free_text_story A/B), which is simply the behaviour
     everywhere now."""
     try:
-        from jaeger_ai.core.instance.schemas import Identity, load_yaml
-        name = (load_yaml(ctx.layout.identity_path, Identity).name or "").strip()
+        from jaeger_agent.instance import identity_name
+        name = identity_name(ctx.layout)
     except Exception:  # noqa: BLE001 — a broken identity never breaks the prompt
         name = ""
     return f"Your name is {name}." if name else ""

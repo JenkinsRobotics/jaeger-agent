@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "jaeger-agent"
-description = "Reusable, headless agent framework for AI applications and robots."
+description = "Reusable, headless agent runtime module for JaegerOS applications and robots."
 readme = "README.md"
 requires-python = ">=3.11,<3.14"
 dynamic = ["version"]
@@ -20,6 +20,24 @@ dependencies = [
     "jaeger-os>=0.9.0",
     "llama-cpp-python>=0.3",
     "jinja2>=3.1",
+    # Six core modules parse YAML at runtime — the skill registry (manifest
+    # v3, capability state, packaging), plugin manifests, and instance.py's
+    # identity/config readers. It was declared only under [dev] and arrived
+    # transitively via jaeger-os, which is not a guarantee for something the
+    # prompt-assembly path depends on.
+    "pyyaml>=6",
+    # schedule_prompt / list_schedules parse and advance cron expressions
+    # through it (memory.py). Undeclared until 1.0.8, which is how a bench
+    # run in an environment without it produced a real, reproducible
+    # failure: schedule_prompt errored, the agent correctly diagnosed a
+    # missing package and tried to install it, and the loop backstop
+    # halted the turn on the repeat.
+    "croniter>=2",
+    # web_search / web_extract are CORE tools (toolset_scoping), and every
+    # search backend past the ddgs chain reaches for requests. web.py's own
+    # comment called it "a hard dep — already on the jaeger extras list";
+    # it was on no list at all.
+    "requests>=2.31",
 ]
 
 # Everything else is a REMOTE or alternative backend, and therefore
@@ -32,8 +50,47 @@ openai = ["openai>=1.0"]
 # Kept as a no-op alias so `jaeger-agent[local]` still resolves for
 # anyone who pinned it before llama.cpp became the default.
 local = []
-mlx = ["mlx-lm>=0.21"]
+mlx = ["mlx-lm>=0.21", "mlx-vlm>=0.1"]
+
+# ── capability extras ──────────────────────────────────────────────
+# Tools that need heavy or platform-specific wheels. Each import site is
+# guarded, so a missing extra degrades that ONE tool instead of breaking
+# the install — but until 1.0.9 none of them were written down, so the
+# only way to learn what `look_at` or `search_memory` needed was to call
+# it and read the traceback.
+#
+# Anything a CORE tool needs is a real dependency above, not an extra.
+
+# Semantic memory: search_memory's embeddings + the sqlite vector store.
+# Without it, recall by exact key still works and search_memory does not.
+embeddings = ["sentence-transformers>=3", "sqlite-vec>=0.1", "numpy>=1.26"]
+
+# look_at / ocr_image — a local VLM.
+vision = ["torch>=2", "transformers>=4.40", "pillow>=10", "numpy>=1.26"]
+
+# Image generation (the media toolset).
+image_gen = ["diffusers>=0.30", "torch>=2", "pillow>=10"]
+
+# listen / voice capture.
+audio = ["pywhispercpp>=1.2", "sounddevice>=0.4", "numpy>=1.26"]
+
+# browse_page — a real browser engine.
+browser = ["playwright>=1.44"]
+
+# ocr_screen on macOS, via the system Vision framework.
+ocr_macos = ["pyobjc-framework-Vision>=10", "pyobjc-framework-Quartz>=10",
+             "pyobjc-framework-Cocoa>=10"]
+
+# The DuckDuckGo search backends. web_search still works without them —
+# the backend chain falls through to the HTML and Wikipedia backends,
+# which is why these are optional and requests is not.
+search = ["ddgs>=6", "duckduckgo-search>=6"]  # ddgs is the current name; the legacy
+                                          # package stays for the fallback backend
+
 dev = ["pytest>=8", "pyyaml>=6", "ruff>=0.4"]
+
+[project.entry-points."jaeger_os.module_roots"]
+jaeger_agent = "jaeger_agent.module_roots:roots"
 
 [tool.setuptools.dynamic]
 version = {attr = "jaeger_agent.__version__"}
