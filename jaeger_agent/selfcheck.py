@@ -61,6 +61,31 @@ class Report:
         }
 
 
+#: Distribution name -> the module it actually provides, where they differ.
+#: Without this the checks report a declared package as missing purely
+#: because ``pip install pillow`` gives you ``import PIL``.
+_DIST_TO_IMPORT = {
+    "pyyaml": "yaml",
+    "llama-cpp-python": "llama_cpp",
+    "jaeger-os": "jaeger_os",
+    "pillow": "PIL",
+    "sentence-transformers": "sentence_transformers",
+    "sqlite-vec": "sqlite_vec",
+    "mlx-lm": "mlx_lm",
+    "mlx-vlm": "mlx_vlm",
+    "pyobjc-framework-vision": "Vision",
+    "pyobjc-framework-quartz": "Quartz",
+    "pyobjc-framework-cocoa": "Foundation",
+    "duckduckgo-search": "duckduckgo_search",
+}
+
+#: Arrive through a declared dependency rather than on their own. Listing
+#: them keeps the informational check honest — flagging certifi as
+#: "undeclared" when requests guarantees it is noise, and noise is how a
+#: report stops being read.
+_TRANSITIVE = {"certifi", "pydantic", "msgspec", "urllib3", "charset_normalizer", "idna"}
+
+
 def _tools() -> list[Any]:
     import jaeger_agent.tools  # noqa: F401 — registers the surface
     from jaeger_os.core.tools.tool_registry import get_tools
@@ -296,8 +321,7 @@ def _check_declared_dependencies_import() -> Check:
     except Exception as exc:  # noqa: BLE001 — installed without the source tree
         return Check("declared deps import", True, f"pyproject unreadable ({type(exc).__name__})")
 
-    # requirement string -> import name, where they differ
-    aliases = {"pyyaml": "yaml", "llama-cpp-python": "llama_cpp", "jaeger-os": "jaeger_os"}
+    aliases = _DIST_TO_IMPORT
     missing = []
     for req in declared:
         name = re.split(r"[<>=!~\[]", req)[0].strip().lower()
@@ -325,12 +349,13 @@ def _check_runtime_imports_are_declared() -> Check:
     except Exception:  # noqa: BLE001
         return Check("runtime imports declared (info)", True, "pyproject unreadable")
 
-    known = {"yaml", "llama_cpp", "jaeger_os", "jaeger_agent"}
-    for req in proj.get("dependencies", []):
-        known.add(re.split(r"[<>=!~\[]", req)[0].strip().lower().replace("-", "_"))
+    known = {"jaeger_agent"} | set(_TRANSITIVE)
+    reqs = list(proj.get("dependencies", []))
     for group in (proj.get("optional-dependencies") or {}).values():
-        for req in group:
-            known.add(re.split(r"[<>=!~\[]", req)[0].strip().lower().replace("-", "_"))
+        reqs.extend(group)
+    for req in reqs:
+        dist = re.split(r"[<>=!~\[]", req)[0].strip().lower()
+        known.add(_DIST_TO_IMPORT.get(dist, dist.replace("-", "_")))
 
     stdlib = set(_sys.stdlib_module_names)
     undeclared: set[str] = set()
