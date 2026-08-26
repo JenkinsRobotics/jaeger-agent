@@ -116,7 +116,8 @@ def _three_laws(_ctx: FragmentContext) -> str:
 # NOTE: there is deliberately NO character/persona fragment here. The persona is
 # applied by the two-pass OUTPUT FILTER (re-voicing the final reply), not injected
 # into the worker prompt — a 4B's execution degrades ~7% with a character in
-# context (measured: dev/docs/reality/persona_compiler.md). Workers run vanilla; the
+# context (measured in JaegerAI, dev/docs/reality/persona_compiler.md).
+# Workers run vanilla; the
 # character's compiled View (Character.character_block()) feeds the filter, which
 # lives in the response path, not prompt assembly.
 #
@@ -140,7 +141,7 @@ def _identity_name(ctx: FragmentContext) -> str:
     (operator, 2026-07-05). The character prompt must never overwrite it.
 
     Name ONLY: soul/traits/voice stay out of the worker prompt (station 3,
-    dev/docs/reality/agentic_runners.md — the measured ~7-point execution tax); the
+    docs/skills/agentic_runners.md — the measured ~7-point execution tax); the
     persona output filter supplies the voice.
 
     ``JAEGER_BENCH_NEUTRAL_IDENTITY`` is now a NO-OP kept for bench-runner

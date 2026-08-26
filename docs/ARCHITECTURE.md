@@ -66,12 +66,12 @@ then have to furnish:
 
 | | count | where |
 | --- | ---: | --- |
-| Tools registered at import | **96** | `jaeger_agent/tools/` |
+| Tools registered at import | **97** | `jaeger_agent/tools/` |
 | Named toolsets | **28** | `jaeger_agent/schemas/tool_bundles.py` |
 | Playbook skills | **107** | `jaeger_agent/skills/` |
 | Provider adapters | **6** | `jaeger_agent/adapters/` |
 | Prompt dialects | **6** | `jaeger_agent/dialects/` |
-| Tests | **375** | `tests/` |
+| Tests | **418** | `tests/` |
 
 Adapters: `anthropic`, `openai`, `local_llama`, `mlx`, `hermes_xml`, plus
 the `base` protocol. Dialects: `chatml`, `gemma`, `harmony`, `llama3`,
@@ -104,6 +104,9 @@ coined in the source are kept as-is rather than re-branded.
 | **The Declared Fragment Registry** | Every line reaching the model is a named, enumerable fragment — hidden conditional injection is structurally impossible | `prompts/assemble.py` | §6 |
 | **The Split-Context Persona Pipeline** | *Name-in, voice-out*: identity name at the start, character only at the end, vanilla worker in between | `prompts/assemble.py` + `persona_filter.py` | §6 |
 | **The Character Block Channel** | The opaque `character_block` string — the one seam an app pours its character through | `prompts/persona_filter.py` | §6 |
+| **The Host Contribution Path** | A host's tools, toolsets and skills are equal to the module's | `skill_registry/toolset_scoping.py` | §3 |
+| **The Self-Check** | 19 model-free assertions on the surface — `python3 -m jaeger_agent.selfcheck` | `selfcheck.py` | §9 |
+| **The Boundary Ratchet** | App-import budget that can only fall | `tests/test_module_boundary.py` | §7 |
 | **Persona Mode C — The Id/Ego Lane** | Optional lane where the character speaks first and reaches the agent through exactly one `perform_task` tool | `prompts/persona_lane.py` | §6 |
 | **The Content Survival Gate** | Restyled never means replaced — facts, numbers, paths must survive verbatim | `prompts/persona_filter.py` | §6 |
 | **The Staged Context Guard** | Four-stage degradation instead of a cliff | `util/context_guard.py` | §5 |
@@ -195,7 +198,7 @@ heard — see §7.
 
 ## 3. Tools — The Live Tool Registry Read, and why Toolset Scoping is off
 
-96 tools register themselves at import time onto the process-wide
+97 tools register themselves at import time onto the process-wide
 JaegerOS registry. The agent re-reads that registry every turn, which is
 why any module, skill, or MCP server that registers a tool becomes
 reachable without this package knowing it exists. That is also why
@@ -204,7 +207,7 @@ contribute them.
 
 ### Toolset Scoping — built, benchmarked, refuted, kept
 
-The obvious optimisation: don't show a small model 96 schemas. Keep a
+The obvious optimisation: don't show a small model ~96 schemas. Keep a
 ~17-tool CORE visible and let the model pull the rest on demand via a
 `load_toolset` tool. Each skill is its own self-describing toolset.
 
@@ -498,6 +501,36 @@ the agent**, the agent never pulls. Mochi already does this
 (`modules/jaeger_agent.py :: set_persona`), and JaegerAI adopted it in
 `0.11.0`. Each remaining coupling wants the same treatment — a seam here,
 filled by whichever application is hosting.
+
+---
+
+## 9. Verifying it
+
+Two things, deliberately separate.
+
+**The Self-Check** — `python3 -m jaeger_agent.selfcheck [--json]`. 19
+assertions, under a second, no model and no host. It catches what only
+surfaces mid-turn: a schema that will not serialise, a duplicate or
+wire-unsafe tool name, a toolset naming a tool nothing provides, a skill
+offered but unloadable, a dialect that cannot render the catalogue, a
+declared dependency that does not import.
+
+That last one earned its place immediately. `croniter` backs cron
+parsing, was never declared, and in an environment without it
+`schedule_prompt` failed mid-turn — the agent diagnosed the missing
+package and tried to `install_package` to repair itself. A benchmark
+found that; a one-second check now does.
+
+**The bench** answers a different question — *does the model route
+well?* — and it needs a live model, an instance, and minutes. The corpus
+lives here (`jaeger_agent/bench/`) because it measures this module; the
+runner stays in the application because it needs a live agent and an
+instance layout.
+
+Between them sits **The Boundary Ratchet**
+(`tests/test_module_boundary.py`), which fails when app imports rise AND
+when they fall — a budget nobody edits is a budget that stops meaning
+anything.
 
 ---
 

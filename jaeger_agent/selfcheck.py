@@ -256,6 +256,44 @@ def _check_use_skill_offers_only_real_skills() -> Check:
     return Check("use_skill enum is honest", not bad, ", ".join(bad[:5]), len(bad))
 
 
+def _check_skills_declare_real_tools() -> Check:
+    """INFORMATIONAL — skills whose ``requires_tools`` name something this
+    install does not have.
+
+    Same shape as the toolset check: a skill may legitimately need a tool
+    the HOST provides (``computer_do``, ``generate_image_fal``,
+    ``send_message``, ``delegate_task``), so this cannot fail on a bare
+    module. It is worth printing because ``use_skill`` warns the model
+    when a skill's tools are missing, and a skill that will always warn
+    is one the model will always avoid.
+    """
+    import re as _re
+
+    import yaml as _yaml
+
+    live = {t.name for t in _tools()}
+    root = pathlib.Path(__file__).resolve().parent / "skills"
+    gaps: dict[str, list[str]] = {}
+    for f in root.rglob("SKILL.md"):
+        head = _re.match(r"^---\n(.*?)\n---", f.read_text(), _re.S)
+        if not head:
+            continue
+        try:
+            meta = _yaml.safe_load(head.group(1)) or {}
+        except Exception:  # noqa: BLE001 — a malformed skill is its own problem
+            continue
+        missing = [t for t in (meta.get("requires_tools") or []) if t not in live]
+        if missing:
+            gaps[str(meta.get("name") or f.parent.name)] = missing
+    detail = (
+        "none — every declared tool is registered locally"
+        if not gaps
+        else f"{len(gaps)} skill(s) need host-provided tools: "
+        + ", ".join(sorted(gaps)[:6])
+    )
+    return Check("skills declare real tools (info)", True, detail, len(gaps))
+
+
 def _check_dialects_render() -> Check:
     """Text-dialect families render the tool catalogue into the prompt.
     A dialect that raises breaks every turn on that model family."""
@@ -395,6 +433,7 @@ CHECKS = (
     _check_skills_load,
     _check_skill_names_unique,
     _check_use_skill_offers_only_real_skills,
+    _check_skills_declare_real_tools,
     _check_dialects_render,
     _check_adapters_import,
     _check_prompt_fragments_enumerable,
