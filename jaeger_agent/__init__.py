@@ -45,7 +45,7 @@ from jaeger_os.core.tools.tool_registry import (
 )
 from jaeger_os.core.tools.tool_schema import ToolDef, dev_mode_enabled
 
-__version__ = "1.0.7"
+__version__ = "1.0.8"
 
 
 # ── lazy exports (PEP 562) ───────────────────────────────────────────

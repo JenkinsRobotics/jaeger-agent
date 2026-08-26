@@ -4,7 +4,7 @@ type: module
 implementation: jaeger
 module: jaeger_agent
 slot: mind
-version: 1.0.7
+version: 1.0.8
 
 # The OWNERSHIP axis (TAXONOMY.md "Module KINDS") — orthogonal to
 # `slot`, which says what ROLE this fills. `mind` is the agent itself:

@@ -164,8 +164,17 @@ CASES: list[BenchCase] = [
               # Soft check — the model often writes a story ABOUT a
               # robot without using the literal word ("Unit 734",
               # "the machine", "the android"). Any of these clears.
+              #
+              # "automaton" added 2026-08-25. E4B began writing "a
+              # gleaming chrome automaton" — byte-identical across runs,
+              # so a deterministic shift, not a flake. The cause is
+              # benign: the tool catalogue in the prompt grew by one
+              # (session_search), and a changed prompt moves a temp-0
+              # completion. The story was always a valid robot story;
+              # the list was one synonym short, which is exactly the gap
+              # the note above describes.
               answer_contains_any=["robot", "android", "machine",
-                                   "circuit", "unit "],
+                                   "circuit", "unit ", "automaton"],
               tags=["routing"]),
     BenchCase(id="free_text_paris",
               prompt="in three words, what is the capital of France",

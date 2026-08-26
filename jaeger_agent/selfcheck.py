@@ -22,7 +22,10 @@ quality; that is the bench's job and the bench stays in the application.
 
 from __future__ import annotations
 
+import ast
 import json
+import pathlib
+import re
 import sys
 from dataclasses import dataclass, field
 from typing import Any
@@ -274,6 +277,85 @@ def _check_prompt_fragments_enumerable() -> Check:
     )
 
 
+def _check_declared_dependencies_import() -> Check:
+    """Every REQUIRED dependency must actually import.
+
+    Added after a bench run failed on ``croniter``: scheduling imports it
+    at call time, it was undeclared and absent, so ``schedule_prompt``
+    errored mid-turn. The agent diagnosed it correctly — it tried to
+    install the package — but that is a very expensive way to learn that
+    a dependency is missing, and it only surfaced because a benchmark
+    happened to exercise that tool.
+    """
+    import importlib.util
+    import tomllib
+
+    root = pathlib.Path(__file__).resolve().parents[1] / "pyproject.toml"
+    try:
+        declared = tomllib.loads(root.read_text())["project"]["dependencies"]
+    except Exception as exc:  # noqa: BLE001 — installed without the source tree
+        return Check("declared deps import", True, f"pyproject unreadable ({type(exc).__name__})")
+
+    # requirement string -> import name, where they differ
+    aliases = {"pyyaml": "yaml", "llama-cpp-python": "llama_cpp", "jaeger-os": "jaeger_os"}
+    missing = []
+    for req in declared:
+        name = re.split(r"[<>=!~\[]", req)[0].strip().lower()
+        mod = aliases.get(name, name.replace("-", "_"))
+        if importlib.util.find_spec(mod) is None:
+            missing.append(f"{name} (import {mod})")
+    return Check("declared deps import", not missing, ", ".join(missing), len(missing))
+
+
+def _check_runtime_imports_are_declared() -> Check:
+    """INFORMATIONAL — third-party imports in package code with no
+    declaration behind them.
+
+    Not a failure: some are genuinely optional (provider SDKs behind
+    extras) and some arrive transitively. But an undeclared import is a
+    tool that works on the developer's machine and raises on a clean
+    install, so the list is worth seeing.
+    """
+    import sys as _sys
+    import tomllib
+
+    root = pathlib.Path(__file__).resolve().parents[1]
+    try:
+        proj = tomllib.loads((root / "pyproject.toml").read_text())["project"]
+    except Exception:  # noqa: BLE001
+        return Check("runtime imports declared (info)", True, "pyproject unreadable")
+
+    known = {"yaml", "llama_cpp", "jaeger_os", "jaeger_agent"}
+    for req in proj.get("dependencies", []):
+        known.add(re.split(r"[<>=!~\[]", req)[0].strip().lower().replace("-", "_"))
+    for group in (proj.get("optional-dependencies") or {}).values():
+        for req in group:
+            known.add(re.split(r"[<>=!~\[]", req)[0].strip().lower().replace("-", "_"))
+
+    stdlib = set(_sys.stdlib_module_names)
+    undeclared: set[str] = set()
+    for f in (root / "jaeger_agent").rglob("*.py"):
+        if "/skills/" in str(f):
+            continue                      # skill payloads carry their own deps
+        try:
+            tree = ast.parse(f.read_text())
+        except (SyntaxError, UnicodeDecodeError):
+            continue
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                mods = [a.name for a in node.names]
+            elif isinstance(node, ast.ImportFrom) and not node.level:
+                mods = [node.module or ""]
+            else:
+                continue
+            for m in mods:
+                head = m.split(".")[0]
+                if head and head not in stdlib and head not in known:
+                    undeclared.add(head)
+    detail = ", ".join(sorted(undeclared)[:12]) if undeclared else "none"
+    return Check("runtime imports declared (info)", True, detail, len(undeclared))
+
+
 CHECKS = (
     _check_tools_registered,
     _check_tool_names_unique,
@@ -291,6 +373,8 @@ CHECKS = (
     _check_dialects_render,
     _check_adapters_import,
     _check_prompt_fragments_enumerable,
+    _check_declared_dependencies_import,
+    _check_runtime_imports_are_declared,
 )
 
 

@@ -26,6 +26,13 @@ dependencies = [
     # transitively via jaeger-os, which is not a guarantee for something the
     # prompt-assembly path depends on.
     "pyyaml>=6",
+    # schedule_prompt / list_schedules parse and advance cron expressions
+    # through it (memory.py). Undeclared until 1.0.8, which is how a bench
+    # run in an environment without it produced a real, reproducible
+    # failure: schedule_prompt errored, the agent correctly diagnosed a
+    # missing package and tried to install it, and the loop backstop
+    # halted the turn on the repeat.
+    "croniter>=2",
 ]
 
 # Everything else is a REMOTE or alternative backend, and therefore
